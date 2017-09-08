@@ -5,7 +5,7 @@ const fs = require('fs-extra');
 const tempy = require('tempy');
 const CDP = require('chrome-remote-interface');
 
-const cdpHost = process.env.CHROME_HEADLESS_PORT_9222_TCP_ADDR || 'chrome-headless';
+const cdpHost = process.env.CHROME_HEADLESS_PORT_9222_TCP_ADDR || 'localhost';
 const cdpPort = process.env.CHROME_HEADLESS_PORT_9222_TCP_PORT || '9222';
 
 function print({
@@ -94,49 +94,64 @@ app.use(fileUpload());
 app.get('/', (req, res) => {
   res.type('text/plain').send(`Here's a nice curl example of the api:
 curl -F "htmlFile=@test.html" -F "width=8.5" -F "height=11" -X POST -H "Content-Type: multipart/form-data" -o result.pdf http://thisurl/
+
+OR
+
+curl -F "url=http://www.google.com" -F "width=8.5" -F "height=11" -X POST -H "Content-Type: multipart/form-data" -o result.pdf http://thisurl/
     `);
 });
 
 app.post('/', (req, res) => {
-  const file = req.files.htmlFile;
+  let url = req.body.url;
   const width = req.body.width ? parseInt(req.body.width, 10) : undefined;
   const height = req.body.height ? parseInt(req.body.height, 10) : undefined;
   const delay = req.body.delay ? parseInt(req.body.delay, 10) : undefined;
 
-  if (!file) {
-    return res.status(422).send('No htmlFile sent.');
+  function runPrint() {
+    print({
+      width,
+      height,
+      delay,
+      url
+    }).then((data) => {
+      res.status(200).type('application/pdf').send(data);
+      fs.remove(newPath);
+    }).catch((e) => {
+      console.log(e);
+      res.status(500).send('some kind of failure');
+    });
   }
 
-  const tmp = tempy.file({extension: 'html'});
+  const file = req.files.htmlFile;
+  if (!file && !url) {
+    return res.status(422).send('No htmlFile or url sent. One of them is required!');
+  }
 
-  file.mv(tmp, (err) => {
-    if (err) {
-      res.status(500).send('There was an error.');
-      throw err;
-    }
+  if (file) {
+    const tmp = tempy.file({extension: 'html'});
+    
+      file.mv(tmp, (err) => {
+        if (err) {
+          res.status(500).send('There was an error.');
+          throw err;
+        }
+    
+        const newPath = `/printfiles/${tmp.replace(/^.*\/(.*)$/, '$1')}`;
+        fs.move(tmp, newPath, {overwrite: true}, err => {
+          if (err) {
+            console.log(err);
+            res.status(500).send('There was an error.');
+          }
+          url = 'file://' + newPath;
 
-    const newPath = `/printfiles/${tmp.replace(/^.*\/(.*)$/, '$1')}`;
-    fs.move(tmp, newPath, {overwrite: true}, err => {
-      if (err) {
-        console.log(err);
-        res.status(500).send('There was an error.');
-      }
-
-      print({
-        width,
-        height,
-        delay,
-        url: 'file://' + newPath
-      }).then((data) => {
-        res.status(200).type('application/pdf').send(data);
-        fs.remove(newPath);
-      }).catch((e) => {
-        console.log(e);
-        res.status(500).send('some kind of failure');
-      });
-    });
-
-  })
+          runPrint();
+          
+        });
+      })
+  } else {
+    runPrint();
+  }
+  
 });
 
 app.listen(process.env.NODE_PORT || 8888);
