@@ -102,10 +102,11 @@ curl -F "url=http://www.google.com" -F "width=8.5" -F "height=11" -X POST -H "Co
 });
 
 app.post('/', (req, res) => {
-  let url = req.body.url;
+  const file = req.files.htmlFile;
   const width = req.body.width ? parseInt(req.body.width, 10) : undefined;
   const height = req.body.height ? parseInt(req.body.height, 10) : undefined;
   const delay = req.body.delay ? parseInt(req.body.delay, 10) : undefined;
+  let url = req.body.url;
 
   function runPrint() {
     print({
@@ -122,7 +123,6 @@ app.post('/', (req, res) => {
     });
   }
 
-  const file = req.files.htmlFile;
   if (!file && !url) {
     return res.status(422).send('No htmlFile or url sent. One of them is required!');
   }
