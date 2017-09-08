@@ -106,27 +106,35 @@ app.post('/', (req, res) => {
   const height = req.body.height ? parseInt(req.body.height, 10) : undefined;
   const delay = req.body.delay ? parseInt(req.body.delay, 10) : undefined;
   let url = req.body.url;
+  let newPath;
 
   function runPrint() {
+    console.log(`Printing ${url} with w=${width} h=${height} delay=${delay}`);
     print({
       width,
       height,
       delay,
       url
     }).then((data) => {
+      console.log(`SUCCESS Printing ${url} with w=${width} h=${height} delay=${delay}`);
       res.status(200).type('application/pdf').send(data);
-      fs.remove(newPath);
+      if (newPath) {
+        fs.remove(newPath);
+      }
     }).catch((e) => {
+      console.log(`ERROR Printing ${url} with w=${width} h=${height} delay=${delay}`);
       console.log(e);
       res.status(500).send('some kind of failure');
     });
   }
 
   if (!file && !url) {
+    console.log(`URL / FILE not specified`);
     return res.status(422).send('No htmlFile or url sent. One of them is required!');
   }
 
   if (file) {
+    console.log(`FILE specified`);
     const tmp = tempy.file({extension: 'html'});
     
       file.mv(tmp, (err) => {
@@ -135,7 +143,7 @@ app.post('/', (req, res) => {
           throw err;
         }
     
-        const newPath = `/printfiles/${tmp.replace(/^.*\/(.*)$/, '$1')}`;
+        newPath = `/printfiles/${tmp.replace(/^.*\/(.*)$/, '$1')}`;
         fs.move(tmp, newPath, {overwrite: true}, err => {
           if (err) {
             console.log(err);
@@ -148,6 +156,7 @@ app.post('/', (req, res) => {
         });
       })
   } else {
+    console.log(`URL specified ${url}`);
     runPrint();
   }
   
