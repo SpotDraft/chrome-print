@@ -1,0 +1,82 @@
+# generate using http://www.htaccesstools.com/htpasswd-generator/
+# something like admin:ENCRYPTED
+# then base64 encode it 
+# to get BASE64 ENCODED
+apiVersion: v1
+data:
+  auth: BASE64 ENCODED
+kind: Secret
+metadata:
+  name: ingress-chrome-print-auth
+type: Opaque
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: chrome-print
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: chrome-print
+        tier: backend
+        track: stable
+    spec:
+      containers:
+        - name: chrome-print
+          image: "coderbhai/chrome-print:latest"
+          imagePullPolicy: "Always"
+          ports:
+            - name: http
+              containerPort: 8888
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: chrome-print
+  labels:
+    app: chrome-print
+    tier: backend
+    track: stable
+spec:
+  selector:
+    app: chrome-print
+    tier: backend
+  ports:
+  - protocol: "TCP"
+    port: 80
+    targetPort: 8888
+  type: ClusterIP
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    # message shown when login is required
+    ingress.kubernetes.io/auth-realm: Authentication Required
+    # name of secret that defines username/password
+    ingress.kubernetes.io/auth-secret: ingress-chrome-print-auth
+    # type of authentication
+    ingress.kubernetes.io/auth-type: basic
+    # force https
+    kubernetes.io/ingress.allow-http: "false"
+    # use our nginx ingress
+    kubernetes.io/ingress.class: nginx
+    # get tls cert from ACME
+    kubernetes.io/tls-acme: 'true'
+  name: chrome-print
+spec:
+  tls:
+  - hosts:
+    - chrome-print.host.com
+    secretName: chrome-print-tls
+  rules:
+  - host: chrome-print.host.com
+    http:
+      paths:
+      - backend:
+          serviceName: chrome-print
+          servicePort: 80
+        path: /
+

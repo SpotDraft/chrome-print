@@ -24,6 +24,17 @@ curl \
   -H "Content-Type: multipart/form-data" \
   -o test.pdf \
   http://localhost:$port/
+
+# OR Send a URL
+
+curl \
+  -F "url=https://www.google.com/" \
+  -F "width=8.5" \
+  -F "height=11" \
+  -X POST \
+  -H "Content-Type: multipart/form-data" \
+  -o test.pdf \
+  http://localhost:$port/
 ```
 
 ## Attribution
