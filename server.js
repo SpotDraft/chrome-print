@@ -68,7 +68,6 @@ function print({
             marginBottom: 0,
             marginLeft: 0,
             marginRight: 0,
-            pageRanges: '1-1',
           }).then((screenshot) => {
             const buffer = new Buffer(screenshot.data, 'base64');
             client.close();
