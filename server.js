@@ -14,6 +14,10 @@ function print({
   width = 8.5,
   height = 11,
   delay = 300,
+  marginBottom = 0,
+  marginLeft = 0,
+  marginRight = 0,
+  marginTop = 0,
   userAgent = null,
   full = false
 }) {
@@ -64,10 +68,10 @@ function print({
             // landscape: false,
             displayHeaderFooter: false,
             printBackground: true,
-            marginTop: 0,
-            marginBottom: 0,
-            marginLeft: 0,
-            marginRight: 0,
+            marginTop,
+            marginBottom,
+            marginLeft,
+            marginRight,
           }).then((screenshot) => {
             const buffer = new Buffer(screenshot.data, 'base64');
             client.close();
@@ -102,9 +106,15 @@ curl -F "url=http://www.google.com" -F "width=8.5" -F "height=11" -X POST -H "Co
 
 app.post('/', (req, res) => {
   const file = req.files && req.files.htmlFile;
-  const width = req.body.width ? parseInt(req.body.width, 10) : undefined;
-  const height = req.body.height ? parseInt(req.body.height, 10) : undefined;
-  const delay = req.body.delay ? parseInt(req.body.delay, 10) : undefined;
+  const getIntOrUndefined = (name) => req.body[name] ? parseInt(req.body[name], 10) : undefined;
+  const width = getIntOrUndefined('width');
+  const height = getIntOrUndefined('height');
+  const delay = getIntOrUndefined('delay');
+  const marginBottom = getIntOrUndefined('marginBottom');
+  const marginLeft = getIntOrUndefined('marginLeft');
+  const marginRight = getIntOrUndefined('marginRight');
+  const marginTop = getIntOrUndefined('marginTop');
+  
   let url = req.body.url;
   let newPath;
 
@@ -114,7 +124,11 @@ app.post('/', (req, res) => {
       width,
       height,
       delay,
-      url
+      url,
+      marginBottom,
+      marginLeft,
+      marginRight,
+      marginTop
     }).then((data) => {
       console.log(`SUCCESS Printing ${url} with w=${width} h=${height} delay=${delay}`);
       res.status(200).type('application/pdf').send(data);

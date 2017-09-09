@@ -37,6 +37,22 @@ curl \
   http://localhost:$port/
 ```
 
+## Options
+
+See also https://chromedevtools.github.io/devtools-protocol/tot/Page/#method-printToPDF
+
+| Name of param  | Default Value | Description                                                |
+|----------------|---------------|------------------------------------------------------------|
+| `htmlFile`     | `undefined`   | One of `htmlFile` or `url` is required.                    |
+| `url`          | `undefined`   | One of `htmlFile` or `url` is required.                    |
+| `width`        | `8.5`         | Width of page in inches                                    |
+| `height`       | `11`          | Height of page in inches                                   |
+| `delay`        | `undefined`   | Delay in milliseconds to wait for JS/AJAX after page load. |
+| `marginBottom` | `0`           | Page bottom margin in inches                               |
+| `marginTop`    | `0`           | Page top margin in inches                                  |
+| `marginLeft`   | `0`           | Page left margin in inches                                 |
+| `marginRight`  | `0`           | Page right margin in inches                                |
+
 ## Attribution
 
 I basically copied and adapted code from [this
