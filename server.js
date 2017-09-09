@@ -119,7 +119,9 @@ app.post('/', (req, res) => {
   let newPath;
 
   function runPrint() {
-    console.log(`Printing ${url} with w=${width} h=${height} delay=${delay}`);
+    console.log(`Printing ${url} with args:
+w=${width} h=${height} delay=${delay}
+margins: t=${marginTop} r=${marginRight} b=${marginBottom} l=${marginLeft}`);
     print({
       width,
       height,
@@ -130,13 +132,13 @@ app.post('/', (req, res) => {
       marginRight,
       marginTop
     }).then((data) => {
-      console.log(`SUCCESS Printing ${url} with w=${width} h=${height} delay=${delay}`);
+      console.log(`SUCCESS Printing ${url}`);
       res.status(200).type('application/pdf').send(data);
       if (newPath) {
         fs.remove(newPath);
       }
     }).catch((e) => {
-      console.log(`ERROR Printing ${url} with w=${width} h=${height} delay=${delay}`);
+      console.log(`ERROR Printing ${url}`);
       console.log(e);
       res.status(500).send('some kind of failure');
     });
