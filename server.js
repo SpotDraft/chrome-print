@@ -2,6 +2,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const fileUpload = require('express-fileupload');
 const fs = require('fs-extra');
+const makeDir = require('make-dir');
+const path = require('path');
 const tempy = require('tempy');
 const CDP = require('chrome-remote-interface');
 
@@ -106,6 +108,7 @@ curl -F "url=http://www.google.com" -F "width=8.5" -F "height=11" -X POST -H "Co
 
 app.post('/', (req, res) => {
   const file = (req.files && req.files.htmlFile);
+  const bodyFile = (req.body && req.body.htmlFile);
   const getIntOrUndefined = (name) => req.body[name] ? parseInt(req.body[name], 10) : undefined;
   const width = getIntOrUndefined('width');
   const height = getIntOrUndefined('height');
@@ -144,14 +147,7 @@ margins: t=${marginTop} r=${marginRight} b=${marginBottom} l=${marginLeft}`);
     });
   }
   
-  if (req.body && req.body.htmlFile) {
-    console.log(`file specified in JSON Body`);
-    file = tempy.file({extension: 'html'});
-    
-    fs.writeFileSync(file, req.body.htmlFile);
-  }
-
-  if (!file && !url) {
+  if (!file && !url && !bodyFile) {
     console.log(`URL / FILE not specified`);
     return res.status(422).send('No htmlFile or url sent. One of them is required!');
   }
@@ -178,6 +174,17 @@ margins: t=${marginTop} r=${marginRight} b=${marginBottom} l=${marginLeft}`);
 
       });
     })
+  } else if (bodyFile) {
+    console.log(`file specified in JSON Body`);
+    const newFile = tempy.file({extension: 'html'});
+    const newPath = `/printfiles/${newFile.replace(/^.*\/(.*)$/, '$1')}`;
+    
+    makeDir.sync(path.dirname(newPath));
+    fs.writeFileSync(newPath, bodyFile);
+
+    url = 'file://' + newPath;
+
+    runPrint();
   } else {
     console.log(`URL specified ${url}`);
     runPrint();
