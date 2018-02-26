@@ -105,7 +105,7 @@ curl -F "url=http://www.google.com" -F "width=8.5" -F "height=11" -X POST -H "Co
 });
 
 app.post('/', (req, res) => {
-  const file = req.files && req.files.htmlFile;
+  const file = (req.files && req.files.htmlFile) || (req.body && req.body.htmlFile);
   const getIntOrUndefined = (name) => req.body[name] ? parseInt(req.body[name], 10) : undefined;
   const width = getIntOrUndefined('width');
   const height = getIntOrUndefined('height');
