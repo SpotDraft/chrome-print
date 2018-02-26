@@ -105,7 +105,7 @@ curl -F "url=http://www.google.com" -F "width=8.5" -F "height=11" -X POST -H "Co
 });
 
 app.post('/', (req, res) => {
-  const file = (req.files && req.files.htmlFile) || (req.body && req.body.htmlFile);
+  const file = (req.files && req.files.htmlFile);
   const getIntOrUndefined = (name) => req.body[name] ? parseInt(req.body[name], 10) : undefined;
   const width = getIntOrUndefined('width');
   const height = getIntOrUndefined('height');
@@ -143,6 +143,13 @@ margins: t=${marginTop} r=${marginRight} b=${marginBottom} l=${marginLeft}`);
       res.status(500).send('some kind of failure');
     });
   }
+  
+  if (req.body && req.body.htmlFile) {
+    console.log(`file specified in JSON Body`);
+    file = tempy.file({extension: 'html'});
+    
+    fs.writeFileSync(file, req.body.htmlFile);
+  }
 
   if (!file && !url) {
     console.log(`URL / FILE not specified`);
@@ -153,24 +160,24 @@ margins: t=${marginTop} r=${marginRight} b=${marginBottom} l=${marginLeft}`);
     console.log(`FILE specified`);
     const tmp = tempy.file({extension: 'html'});
     
-      file.mv(tmp, (err) => {
-        if (err) {
-          res.status(500).send('There was an error.');
-          throw err;
-        }
-    
-        newPath = `/printfiles/${tmp.replace(/^.*\/(.*)$/, '$1')}`;
-        fs.move(tmp, newPath, {overwrite: true}, err => {
-          if (err) {
-            console.log(err);
-            res.status(500).send('There was an error.');
-          }
-          url = 'file://' + newPath;
+    file.mv(tmp, (err) => {
+      if (err) {
+        res.status(500).send('There was an error.');
+        throw err;
+      }
 
-          runPrint();
-          
-        });
-      })
+      newPath = `/printfiles/${tmp.replace(/^.*\/(.*)$/, '$1')}`;
+      fs.move(tmp, newPath, {overwrite: true}, err => {
+        if (err) {
+          console.log(err);
+          res.status(500).send('There was an error.');
+        }
+        url = 'file://' + newPath;
+
+        runPrint();
+
+      });
+    })
   } else {
     console.log(`URL specified ${url}`);
     runPrint();
