@@ -6,6 +6,18 @@ const makeDir = require("make-dir");
 const path = require("path");
 const tempy = require("tempy");
 const CDP = require("chrome-remote-interface");
+const URL = require("url");
+const IPCIDR = require("ip-cidr");
+const Address4 = require("ip-address").Address4;
+const dns = require("dns");
+
+const PRIVATE_IP_RANGES = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "127.0.0.1/32", // loopback
+  "169.254.169.254/32", // aws metadata server
+];
 
 const cdpHost = process.env.CHROME_HEADLESS_PORT_9222_TCP_ADDR || "localhost";
 const cdpPort = process.env.CHROME_HEADLESS_PORT_9222_TCP_PORT || "9222";
@@ -37,22 +49,81 @@ function print({
           height,
           deviceScaleFactor: 0,
           mobile: false,
-          fitWindow: false
+          fitWindow: false,
         };
 
         // Enable events on domains we are interested in.
-        Promise.all([Page.enable(), DOM.enable(), Network.enable()])
-          .then(() => {
-            Emulation.setDeviceMetricsOverride(deviceMetrics)
-              .then(() => {
-                Emulation.setVisibleSize({ width, height }).then(() => {
-                  // Navigate to target page
-                  Page.navigate({ url }).then(() => {});
+        Promise.all([
+          Page.enable(),
+          DOM.enable(),
+          Network.enable(),
+        ]).then(() => {
+          Network.setRequestInterceptionEnabled({ enabled: true })
+        }).then(() => {
+          Network.requestIntercepted(data => {
+            const interceptionId = data.interceptionId;
+            const request = data.request;
+
+            const parsedUrl = URL.parse(request.url);
+
+            // set to true if a ip requested is an internal IP.
+            let internalIp = false;
+            internalIp = isInternalIp(parsedUrl.hostname);
+            console.log(`IsInternalIP ${parsedUrl.hostname} = ${internalIp}`)
+
+            // set to true if a host being requested is a cluster local host.
+            let internalHost = false;
+
+            // if the requested url is file it is blocked outside this method.
+            // but we might generate a local url so allow that.
+            const fileUrl = request.url.indexOf("file://") >= 0 && request.url !== url;
+            function continueRequestMaybe() {
+              if (fileUrl || internalIp || internalHost) {
+                console.log("Blocking URL: " + request.url + " as it is not safe!");
+                console.log("Reason for blocking: " + request.url + " " + fileUrl + " " + internalIp + " " + internalHost);
+                Network.continueInterceptedRequest({
+                  interceptionId,
+                  errorReason: "Aborted"
                 });
-              })
-              .catch(e => reject(e));
+              } else {
+                Network.continueInterceptedRequest({
+                  interceptionId,
+                });
+              }
+            }
+
+            if (parsedUrl.protocol === "file:") {
+              continueRequestMaybe();
+              return;
+            }
+
+            // cluster local domains might not have a "."
+            if (
+              parsedUrl.hostname.indexOf(".") <= 0 ||
+              parsedUrl.hostname.endsWith(".internal") ||
+              parsedUrl.hostname.endsWith("cluster.local")
+            ) {
+              internalHost = true;
+              continueRequestMaybe();
+            } else {
+              // try to resolve hostname and check if IP is internal
+              dns.resolve4(parsedUrl.hostname, (err, addresses) => {
+                if (err) {
+                  continueRequestMaybe();
+                  return;
+                }
+
+                if (isInternalIp(addresses[0])) {
+                  internalHost = true;
+                }
+                continueRequestMaybe();
+              });
+            }
           })
-          .catch(e => reject(e));
+        }).then(() => Emulation.setDeviceMetricsOverride(deviceMetrics)
+        ).then(() => Emulation.setVisibleSize({ width, height })
+        ).then(() => Page.navigate({ url })).catch((e) => reject(e));
+
 
         // Wait for page load event to take screenshot
         Page.loadEventFired(() => {
@@ -68,25 +139,51 @@ function print({
               marginTop,
               marginBottom,
               marginLeft,
-              marginRight
+              marginRight,
+            }).then((screenshot) => {
+              const buffer = new Buffer(screenshot.data, "base64");
+              client.close();
+              CDP.Close({ id: client.target.id, host: cdpHost, port: cdpPort })
+                .then(() => resolve(buffer))
+                .catch(e => reject(e));
             })
-              .then(screenshot => {
-                const buffer = new Buffer(screenshot.data, "base64");
-                client.close();
-                CDP.Close({
-                  id: client.target.id,
-                  host: cdpHost,
-                  port: cdpPort
-                })
-                  .then(() => resolve(buffer))
-                  .catch(e => reject(e));
-              })
               .catch(e => reject(e));
-          }, delay);
+
+            // Wait for page load event to take screenshot
+            Page.loadEventFired(() => {
+              setTimeout(() => {
+                Page.printToPDF({
+                  paperWidth: width,
+                  paperHeight: height,
+
+                  scale: 1,
+                  // landscape: false,
+                  displayHeaderFooter: false,
+                  printBackground: true,
+                  marginTop,
+                  marginBottom,
+                  marginLeft,
+                  marginRight
+                })
+                  .then(screenshot => {
+                    const buffer = new Buffer(screenshot.data, "base64");
+                    client.close();
+                    CDP.Close({
+                      id: client.target.id,
+                      host: cdpHost,
+                      port: cdpPort
+                    })
+                      .then(() => resolve(buffer))
+                      .catch(e => reject(e));
+                  })
+                  .catch(e => reject(e));
+              }, delay);
+            });
+          })
+            
+        }).catch(err => {
+          reject(err);
         });
-      })
-      .catch(err => {
-        reject(err);
       });
   });
 }
@@ -180,6 +277,7 @@ margins: t=${marginTop} r=${marginRight} b=${marginBottom} l=${marginLeft}`);
         if (err) {
           console.log(err);
           res.status(500).send("There was an error.");
+          return;
         }
         url = "file://" + newPath;
 
@@ -199,10 +297,35 @@ margins: t=${marginTop} r=${marginRight} b=${marginBottom} l=${marginLeft}`);
     runPrint();
   } else {
     console.log(`URL specified ${url}`);
+    if (url.indexOf("file://") >= 0) {
+      res.status(422).send("File URL detected");
+      return;
+    }
     runPrint();
   }
 });
 
-app.listen(process.env.NODE_PORT || 8888, function() {
+app.listen(process.env.NODE_PORT || 8888, function () {
   console.log("listening to +++", 8888);
 });
+
+/** Checks if the IP falls in an Internal CIDR range. */
+function isInternalIp(hostname) {
+  let parsedIp;
+  try {
+    parsedIp = new Address4(hostname);
+  } catch (e) {
+    return false;
+  }
+
+  if (parsedIp.isValid()) {
+    for (let i = 0; i < PRIVATE_IP_RANGES.length; i++) {
+      const cird = new IPCIDR(PRIVATE_IP_RANGES[i]);
+      if (cird.contains(parsedIp)) {
+        return true;
+      }
+    };
+  }
+  return false;
+}
+
