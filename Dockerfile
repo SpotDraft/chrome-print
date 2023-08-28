@@ -1,6 +1,6 @@
 # multi-stage build new in Docker 17.05 (https://docs.docker.com/engine/userguide/eng-image/multistage-build/)
 FROM yukinying/chrome-headless
-FROM node:12
+FROM node:16.20.2-bullseye
 
 # chrome dependencies
 RUN apt-get update -y && apt-get install -y -q libnss3 libfontconfig && rm -rf /var/lib/apt/lists/*
